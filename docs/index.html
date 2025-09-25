@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wellness Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="container header-inner">
+      <div class="logo">AI Learning</div>
+      <nav class="main-nav">
+        <a href="#" class="nav-item is-active">Dashboard</a>
+        <a href="#" class="nav-item">Check-ins</a>
+        <a href="#" class="nav-item">Insights</a>
+      </nav>
+      <div class="header-actions">
+        <button class="btn btn-secondary" id="view-avatar-btn">Wellness Avatar</button>
+        <button class="btn btn-primary" id="open-chat-btn">AI Buddy Chat</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <h1 class="hero-title">Your Wellness Overview</h1>
+        <p class="hero-sub">Track mood, routines, and progress in one place.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary" id="new-checkin-btn">Start Mood Check-in</button>
+          <button class="btn btn-secondary" id="quick-open-chat-btn">Open AI Buddy</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="container section-cards">
+      <div class="grid grid-features">
+        <article class="card feature-card">
+          <div class="card-header">
+            <h2 class="card-title">Mood Trend</h2>
+          </div>
+          <canvas id="moodTrendChart" height="140"></canvas>
+        </article>
+
+        <article class="card feature-card">
+          <div class="card-header">
+            <h2 class="card-title">Recent Check-ins</h2>
+          </div>
+          <ul id="recentCheckins" class="list"></ul>
+        </article>
+
+        <article class="card feature-card">
+          <div class="card-header">
+            <h2 class="card-title">Weekly Wellness</h2>
+          </div>
+          <canvas id="weeklyChart" height="140"></canvas>
+        </article>
+
+        <article class="card feature-card">
+          <div class="card-header">
+            <h2 class="card-title">Monthly Wellness</h2>
+          </div>
+          <canvas id="monthlyChart" height="140"></canvas>
+        </article>
+
+        <article class="card feature-card">
+          <div class="card-header">
+            <h2 class="card-title">Current Mood Notes</h2>
+          </div>
+          <div id="currentMoodNotes" class="notes"></div>
+        </article>
+
+        <article class="card feature-card">
+          <div class="card-header">
+            <h2 class="card-title">Upcoming Self-care</h2>
+          </div>
+          <ul id="selfCareReminders" class="list"></ul>
+        </article>
+
+        <article class="card feature-card">
+          <div class="card-header">
+            <h2 class="card-title">Recent Achievements</h2>
+          </div>
+          <ul id="recentAchievements" class="badges"></ul>
+        </article>
+
+        <article class="card feature-card">
+          <div class="card-header">
+            <h2 class="card-title">Relaxation Time</h2>
+          </div>
+          <div id="relaxationSummary" class="stats"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal" id="chatModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" data-close="chatModal"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>AI Buddy</h3>
+        <button class="icon-btn" data-close="chatModal" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body chat-body">
+        <div class="chat-log" id="chatLog"></div>
+        <div class="chat-input">
+          <input type="text" id="chatText" placeholder="Type a message..." />
+          <button class="btn btn-primary" id="sendChat">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="avatarModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" data-close="avatarModal"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Wellness Avatar</h3>
+        <button class="icon-btn" data-close="avatarModal" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body avatar-body">
+        <div class="avatar-visual" id="avatarVisual"></div>
+        <div class="avatar-legend">
+          <span class="badge mood-good">Positive</span>
+          <span class="badge mood-neutral">Neutral</span>
+          <span class="badge mood-low">Low</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
