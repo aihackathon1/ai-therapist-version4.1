@@ -334,14 +334,14 @@ export default function Hero() {
                           </div>
                           <div className="bubble-bot rounded-2xl rounded-tl-sm px-4 py-3 max-w-xs bg-gray-50">
                             <p className="text-text-dark text-sm">{message.text}</p>
-                            <p className="mt-1 text-[11px] text-secondary">{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                            <p className="mt-1 text-[11px] text-secondary">{message.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</p>
                           </div>
                         </>
                       ) : (
                         <>
                           <div className="bubble-user rounded-2xl rounded-tr-sm px-4 py-3 max-w-xs">
                             <p className="text-white text-sm">{message.text}</p>
-                            <p className="mt-1 text-[11px] text-white/80">{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                            <p className="mt-1 text-[11px] text-white/80">{message.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</p>
                           </div>
                           <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center border border-border flex-shrink-0">
                             <span className="text-xs text-text-dark font-medium">U</span>

@@ -1,92 +1,189 @@
 'use client'
 
 import Navigation from '@/components/Navigation'
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
-
-interface MoodEntry {
-  id: string;
-  mood: string;
-  rating: number;
-  timestamp: Date;
-  notes?: string;
-}
+import { MoodEntry, MoodAnalytics, ChatInsight, MoodTrendData, MOOD_TYPES } from '@/lib/types/mood'
+import { createSupabaseClient } from '@/lib/supabase/client'
+import { MoodDataProcessor, ChatAnalyzer } from '@/lib/utils/moodAnalysis'
+import MoodRecommendations from '@/components/MoodRecommendations'
 
 export default function Dashboard() {
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
-  const [moodComparison, setMoodComparison] = useState<any[]>([]);
-  const [moodOverTime, setMoodOverTime] = useState<any[]>([]);
+  const [moodAnalytics, setMoodAnalytics] = useState<MoodAnalytics | null>(null);
+  const [moodTrends, setMoodTrends] = useState<MoodTrendData[]>([]);
+  const [chatInsights, setChatInsights] = useState<ChatInsight | null>(null);
   const [journeySummary, setJourneySummary] = useState<{before: string, after: string}>({before: '', after: ''});
-  const [stats, setStats] = useState({
-    totalEntries: 0,
-    averageMood: 0,
-    moodImprovement: 0,
-    streak: 0
-  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [moodDistribution, setMoodDistribution] = useState<any[]>([]);
+  const [weeklyPattern, setWeeklyPattern] = useState<any[]>([]);
 
-  // Load mood entries from localStorage
+  const supabase = createSupabaseClient();
+
+  // Load user and data
   useEffect(() => {
-    const loadMoodEntries = () => {
+    const loadUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    loadUser();
+  }, [supabase.auth]);
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      setIsLoading(true);
+      
+      try {
+        if (user) {
+          // Load analytics from API
+          const analyticsResponse = await fetch('/api/analytics');
+          const analyticsData = await analyticsResponse.json();
+          if (analyticsData.success) {
+            setMoodAnalytics(analyticsData.data);
+          }
+
+          // Load mood entries
+          const moodResponse = await fetch('/api/mood?limit=100');
+          const moodData = await moodResponse.json();
+          if (moodData.success) {
+            const entries = moodData.data.map((entry: any) => ({
+              ...entry,
+              createdAt: new Date(entry.created_at),
+              moodType: entry.mood_type,
+              source: entry.source
+            }));
+            setMoodEntries(entries);
+            
+            // Process mood data for charts
+            const trends = MoodDataProcessor.calculateTrends(entries, 30);
+            setMoodTrends(trends);
+            
+            // Create mood distribution chart data
+            const distribution = Object.entries(analyticsData.data.moodDistribution || {}).map(([mood, count]) => ({
+              mood: MOOD_TYPES[mood as keyof typeof MOOD_TYPES]?.label || mood,
+              count: count as number,
+              emoji: MOOD_TYPES[mood as keyof typeof MOOD_TYPES]?.emoji || '😐'
+            }));
+            setMoodDistribution(distribution);
+
+            // Generate weekly pattern
+            const weeklyData = generateWeeklyPattern(entries);
+            setWeeklyPattern(weeklyData);
+
+            // Generate journey summary
+            generateJourneySummary(entries, analyticsData.data.moodImprovement);
+          }
+
+          // Load chat insights
+          await loadChatInsights();
+        } else {
+          // Fallback to localStorage for non-authenticated users
       const savedEntries = localStorage.getItem('moodEntries');
       if (savedEntries) {
         const entries = JSON.parse(savedEntries).map((entry: any) => ({
           ...entry,
-          timestamp: new Date(entry.timestamp)
+              createdAt: new Date(entry.timestamp),
+              moodType: entry.mood,
+              source: 'manual'
         }));
         setMoodEntries(entries);
         processMoodData(entries);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    loadMoodEntries();
-    
-    // Listen for storage changes (in case user logs mood in another tab)
-    window.addEventListener('storage', loadMoodEntries);
-    return () => window.removeEventListener('storage', loadMoodEntries);
-  }, []);
+    if (user !== null) {
+      loadDashboardData();
+    }
+  }, [user]);
+
+  const loadChatInsights = async () => {
+    try {
+      // This would be implemented with a chat insights API
+      // For now, we'll create mock data
+      const mockChatInsights: ChatInsight = {
+        recentSessions: [],
+        averageSessionLength: 15,
+        mostDiscussedTopics: ['anxiety', 'work', 'relationships'],
+        moodCorrelation: {
+          beforeSession: 45,
+          afterSession: 65,
+          improvement: 20
+        },
+        sessionEffectiveness: 75
+      };
+      setChatInsights(mockChatInsights);
+    } catch (error) {
+      console.error('Error loading chat insights:', error);
+    }
+  };
+
+  const generateWeeklyPattern = (entries: MoodEntry[]) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const weeklyData = days.map(day => ({
+      day,
+      averageMood: 0,
+      entryCount: 0
+    }));
+
+    entries.forEach(entry => {
+      const dayOfWeek = entry.createdAt.getDay();
+      weeklyData[dayOfWeek].averageMood += entry.intensity;
+      weeklyData[dayOfWeek].entryCount += 1;
+    });
+
+    return weeklyData.map(day => ({
+      ...day,
+      averageMood: day.entryCount > 0 ? Math.round(day.averageMood / day.entryCount) : 0
+    }));
+  };
 
   const processMoodData = (entries: MoodEntry[]) => {
     if (entries.length === 0) return;
 
     // Sort entries by timestamp
-    const sortedEntries = [...entries].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    const sortedEntries = [...entries].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     
     // Calculate mood comparison (first vs last entries for each mood type)
-    const moodTypes = ['angry', 'anxious', 'sad', 'neutral', 'happy', 'calm', 'stressed', 'grateful'];
+    const moodTypes = Object.keys(MOOD_TYPES) as Array<keyof typeof MOOD_TYPES>;
     const comparisonData = moodTypes.map(moodType => {
-      const moodEntries = sortedEntries.filter(entry => entry.mood === moodType);
+      const moodEntries = sortedEntries.filter(entry => entry.moodType === moodType);
       if (moodEntries.length === 0) {
-        return { mood: moodType, before: 0, after: 0 };
+        return { mood: MOOD_TYPES[moodType].label, before: 0, after: 0 };
       }
       
       const firstEntry = moodEntries[0];
       const lastEntry = moodEntries[moodEntries.length - 1];
       
       return {
-        mood: moodType.charAt(0).toUpperCase() + moodType.slice(1),
-        before: firstEntry.rating,
-        after: lastEntry.rating
+        mood: MOOD_TYPES[moodType].label,
+        before: firstEntry.intensity,
+        after: lastEntry.intensity
       };
     }).filter(item => item.before > 0 || item.after > 0);
-
-    setMoodComparison(comparisonData);
 
     // Calculate mood over time (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const recentEntries = sortedEntries.filter(entry => entry.timestamp >= thirtyDaysAgo);
+    const recentEntries = sortedEntries.filter(entry => entry.createdAt >= thirtyDaysAgo);
     
     // Group by day and calculate average mood
     const dailyMoods = recentEntries.reduce((acc, entry) => {
-      const date = entry.timestamp.toISOString().split('T')[0];
+      const date = entry.createdAt.toISOString().split('T')[0];
       if (!acc[date]) {
         acc[date] = { entries: [], totalRating: 0, count: 0 };
       }
       acc[date].entries.push(entry);
-      acc[date].totalRating += entry.rating;
+      acc[date].totalRating += entry.intensity;
       acc[date].count += 1;
       return acc;
     }, {} as any);
@@ -100,57 +197,14 @@ export default function Dashboard() {
 
     setMoodOverTime(timeSeriesData);
 
-    // Calculate stats
-    const totalEntries = entries.length;
-    const averageMood = Math.round(entries.reduce((sum, entry) => sum + entry.rating, 0) / totalEntries);
-    
-    // Calculate mood improvement (compare first week vs last week)
-    const firstWeek = sortedEntries.slice(0, Math.min(7, sortedEntries.length));
-    const lastWeek = sortedEntries.slice(-Math.min(7, sortedEntries.length));
-    
-    const firstWeekAvg = firstWeek.length > 0 ? 
-      Math.round(firstWeek.reduce((sum, entry) => sum + entry.rating, 0) / firstWeek.length) : 0;
-    const lastWeekAvg = lastWeek.length > 0 ? 
-      Math.round(lastWeek.reduce((sum, entry) => sum + entry.rating, 0) / lastWeek.length) : 0;
-    
-    const moodImprovement = lastWeekAvg - firstWeekAvg;
-
-    // Calculate streak (consecutive days with entries)
-    let streak = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    for (let i = 0; i < 30; i++) {
-      const checkDate = new Date(today);
-      checkDate.setDate(checkDate.getDate() - i);
-      
-      const hasEntry = entries.some(entry => {
-        const entryDate = new Date(entry.timestamp);
-        entryDate.setHours(0, 0, 0, 0);
-        return entryDate.getTime() === checkDate.getTime();
-      });
-      
-      if (hasEntry) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-
-    setStats({
-      totalEntries,
-      averageMood,
-      moodImprovement,
-      streak
-    });
-
     // Generate journey summary
-    generateJourneySummary(sortedEntries, moodImprovement);
+    const improvement = MoodDataProcessor.calculateImprovement(entries);
+    generateJourneySummary(sortedEntries, improvement);
   };
 
   const getMostFrequentMood = (entries: MoodEntry[]) => {
     const moodCounts = entries.reduce((acc, entry) => {
-      acc[entry.mood] = (acc[entry.mood] || 0) + 1;
+      acc[entry.moodType] = (acc[entry.moodType] || 0) + 1;
       return acc;
     }, {} as any);
     
@@ -169,8 +223,8 @@ export default function Dashboard() {
     const firstWeek = entries.slice(0, Math.min(7, entries.length));
     const lastWeek = entries.slice(-Math.min(7, entries.length));
     
-    const firstWeekAvg = firstWeek.reduce((sum, entry) => sum + entry.rating, 0) / firstWeek.length;
-    const lastWeekAvg = lastWeek.reduce((sum, entry) => sum + entry.rating, 0) / lastWeek.length;
+    const firstWeekAvg = firstWeek.reduce((sum, entry) => sum + entry.intensity, 0) / firstWeek.length;
+    const lastWeekAvg = lastWeek.reduce((sum, entry) => sum + entry.intensity, 0) / lastWeek.length;
     
     const dominantMoodFirst = getMostFrequentMood(firstWeek);
     const dominantMoodLast = getMostFrequentMood(lastWeek);
@@ -258,8 +312,22 @@ export default function Dashboard() {
           </p>
         </motion.div>
 
+        {/* Loading State */}
+        {isLoading && (
+          <motion.div 
+            className="card text-center py-12"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="text-6xl mb-4">⏳</div>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-4">Loading Your Dashboard</h2>
+            <p className="text-gray-600">Analyzing your mood data and chat insights...</p>
+          </motion.div>
+        )}
+
         {/* No Data State */}
-        {moodEntries.length === 0 && (
+        {!isLoading && moodEntries.length === 0 && (
           <motion.div 
             className="card text-center py-12"
             initial={{ opacity: 0, y: 30 }}
@@ -269,17 +337,25 @@ export default function Dashboard() {
             <div className="text-6xl mb-4">📊</div>
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">No Mood Data Yet</h2>
             <p className="text-gray-600 mb-8">Start tracking your mood to see your progress here!</p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link 
               href="/mood-tracking"
               className="btn-primary inline-block"
             >
               Start Tracking Your Mood
             </Link>
+              <Link 
+                href="/"
+                className="btn-secondary inline-block"
+              >
+                Chat with AI Therapist
+              </Link>
+            </div>
           </motion.div>
         )}
 
         {/* Dashboard Content */}
-        {moodEntries.length > 0 && (
+        {!isLoading && moodEntries.length > 0 && (
           <>
             {/* Stats Overview */}
             <motion.div 
@@ -292,22 +368,22 @@ export default function Dashboard() {
                 className="card text-center"
                 variants={staggerItem}
               >
-                <div className="text-3xl font-bold text-ai-purple mb-2">{stats.totalEntries}</div>
+                <div className="text-3xl font-bold text-ai-purple mb-2">{moodAnalytics?.totalEntries || 0}</div>
                 <div className="text-gray-600">Total Entries</div>
               </motion.div>
               <motion.div 
                 className="card text-center"
                 variants={staggerItem}
               >
-                <div className="text-3xl font-bold text-ai-green mb-2">{stats.averageMood}</div>
+                <div className="text-3xl font-bold text-ai-green mb-2">{Math.round(moodAnalytics?.averageMood || 0)}</div>
                 <div className="text-gray-600">Average Mood</div>
               </motion.div>
               <motion.div 
                 className="card text-center"
                 variants={staggerItem}
               >
-                <div className={`text-3xl font-bold mb-2 ${stats.moodImprovement >= 0 ? 'text-ai-green' : 'text-ai-red'}`}>
-                  {stats.moodImprovement >= 0 ? '+' : ''}{stats.moodImprovement}
+                <div className={`text-3xl font-bold mb-2 ${(moodAnalytics?.moodImprovement || 0) >= 0 ? 'text-ai-green' : 'text-ai-red'}`}>
+                  {(moodAnalytics?.moodImprovement || 0) >= 0 ? '+' : ''}{Math.round(moodAnalytics?.moodImprovement || 0)}
                 </div>
                 <div className="text-gray-600">Mood Improvement</div>
               </motion.div>
@@ -315,26 +391,104 @@ export default function Dashboard() {
                 className="card text-center"
                 variants={staggerItem}
               >
-                <div className="text-3xl font-bold text-ai-orange mb-2">{stats.streak}</div>
+                <div className="text-3xl font-bold text-ai-orange mb-2">{moodAnalytics?.currentStreak || 0}</div>
                 <div className="text-gray-600">Day Streak</div>
               </motion.div>
             </motion.div>
 
-            {/* Mood Improvement Chart */}
-            {moodComparison.length > 0 && (
+            {/* Chat Insights Panel */}
+            {chatInsights && (
               <motion.div 
-                className="card mb-8"
+                className="card mb-8 bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-blue-400"
                 variants={staggerItem}
                 initial="hidden"
                 whileInView="visible"
                 viewport={{ once: true }}
               >
-                <h2 className="text-2xl font-semibold text-gray-800 mb-6">Mood Improvement</h2>
-                <div className="h-80">
+                <h2 className="text-2xl font-semibold text-gray-800 mb-6 flex items-center">
+                  <span className="text-2xl mr-2">🤖</span>
+                  AI Chat Insights
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600 mb-2">{chatInsights.sessionEffectiveness}%</div>
+                    <div className="text-gray-600">Session Effectiveness</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600 mb-2">{chatInsights.averageSessionLength} min</div>
+                    <div className="text-gray-600">Avg Session Length</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600 mb-2">+{chatInsights.moodCorrelation.improvement}</div>
+                    <div className="text-gray-600">Mood Improvement Post-Chat</div>
+                  </div>
+                </div>
+                {chatInsights.mostDiscussedTopics.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">Most Discussed Topics</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {chatInsights.mostDiscussedTopics.map((topic, index) => (
+                        <span key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                          {topic}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Charts Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+              {/* Mood Distribution */}
+              {moodDistribution.length > 0 && (
+                <motion.div 
+                  className="card"
+                  variants={staggerItem}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                >
+                  <h2 className="text-2xl font-semibold text-gray-800 mb-6">Mood Distribution</h2>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={moodDistribution}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ mood, emoji, percent }) => `${emoji} ${mood} ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="count"
+                        >
+                          {moodDistribution.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={`hsl(${index * 45}, 70%, 60%)`} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Weekly Pattern */}
+              {weeklyPattern.length > 0 && (
+                <motion.div 
+                  className="card"
+                  variants={staggerItem}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                >
+                  <h2 className="text-2xl font-semibold text-gray-800 mb-6">Weekly Mood Pattern</h2>
+                  <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={moodComparison} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <BarChart data={weeklyPattern} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="mood" stroke="#6B7280" />
+                        <XAxis dataKey="day" stroke="#6B7280" />
                       <YAxis stroke="#6B7280" domain={[0, 100]} />
                       <Tooltip 
                         contentStyle={{ 
@@ -343,23 +497,62 @@ export default function Dashboard() {
                           borderRadius: '8px',
                           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                         }} 
-                        formatter={(value, name) => [value, name === 'before' ? 'First Entry' : 'Latest Entry']}
+                          formatter={(value) => [value, 'Average Mood']}
                       />
                       <Bar 
-                        dataKey="before" 
-                        fill="#EF4444" 
-                        name="First Entry" 
-                        radius={[4, 4, 0, 0]}
-                        animationDuration={1500}
-                      />
-                      <Bar 
-                        dataKey="after" 
-                        fill="#10B981" 
-                        name="Latest Entry" 
+                          dataKey="averageMood" 
+                          fill="#8B5CF6" 
                         radius={[4, 4, 0, 0]}
                         animationDuration={1500}
                       />
                     </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </motion.div>
+            )}
+            </div>
+
+            {/* Mood Over Time Chart */}
+            {moodTrends.length > 0 && (
+              <motion.div 
+                className="card mb-8"
+                variants={staggerItem}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+              >
+                <h2 className="text-2xl font-semibold text-gray-800 mb-6">Mood Trends Over Time</h2>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={moodTrends} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                      <XAxis dataKey="date" stroke="#6B7280" />
+                      <YAxis stroke="#6B7280" domain={[0, 100]} />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'white', 
+                          border: '1px solid #E5E7EB', 
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                        }} 
+                        formatter={(value, name) => [value, 'Mood Rating']}
+                        labelFormatter={(label) => `Date: ${label}`}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="averageRating" 
+                        stroke="#8B5CF6" 
+                        fill="url(#colorGradient)"
+                        strokeWidth={3}
+                        animationDuration={1500}
+                      />
+                      <defs>
+                        <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.1}/>
+                        </linearGradient>
+                      </defs>
+                    </AreaChart>
                   </ResponsiveContainer>
                 </div>
               </motion.div>
@@ -372,43 +565,6 @@ export default function Dashboard() {
               whileInView="visible"
               viewport={{ once: true }}
             >
-              {/* Mood Over Time Chart */}
-              {moodOverTime.length > 0 && (
-                <motion.div 
-                  className="card"
-                  variants={staggerItem}
-                >
-                  <h2 className="text-2xl font-semibold text-gray-800 mb-6">Mood Over Time</h2>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={moodOverTime} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                        <XAxis dataKey="date" stroke="#6B7280" />
-                        <YAxis stroke="#6B7280" domain={[0, 100]} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB', 
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
-                          formatter={(value, name) => [value, 'Mood Rating']}
-                          labelFormatter={(label) => `Date: ${label}`}
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="averageRating" 
-                          stroke="#8B5CF6" 
-                          strokeWidth={3}
-                          dot={{ fill: '#8B5CF6', strokeWidth: 2, r: 6 }}
-                          activeDot={{ r: 8, stroke: '#8B5CF6', strokeWidth: 2 }}
-                          animationDuration={1500}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </motion.div>
-              )}
 
               {/* Journey Summary */}
               <motion.div 
@@ -456,6 +612,16 @@ export default function Dashboard() {
                     </div>
                   </motion.div>
                 )}
+              </motion.div>
+
+              {/* Mood Recommendations */}
+              <motion.div 
+                variants={staggerItem}
+              >
+                <MoodRecommendations 
+                  currentMood={moodAnalytics?.dominantMood as any}
+                  recentMoods={moodEntries.slice(-5).map(entry => entry.moodType)}
+                />
               </motion.div>
             </motion.div>
 

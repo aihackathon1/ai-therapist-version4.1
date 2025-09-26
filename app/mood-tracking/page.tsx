@@ -4,145 +4,264 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import Navigation from '@/components/Navigation';
-
-interface MoodEntry {
-  id: string;
-  mood: string;
-  rating: number;
-  timestamp: Date;
-  notes?: string;
-}
-
-const moodTypes = [
-  { 
-    emoji: '😡', 
-    label: 'Angry', 
-    value: 'angry', 
-    color: 'bg-red-100 hover:bg-red-200 border-red-300',
-    description: 'Feeling frustrated or irritated'
-  },
-  { 
-    emoji: '😰', 
-    label: 'Anxious', 
-    value: 'anxious', 
-    color: 'bg-orange-100 hover:bg-orange-200 border-orange-300',
-    description: 'Feeling worried or nervous'
-  },
-  { 
-    emoji: '😔', 
-    label: 'Sad', 
-    value: 'sad', 
-    color: 'bg-yellow-100 hover:bg-yellow-200 border-yellow-300',
-    description: 'Feeling down or melancholy'
-  },
-  { 
-    emoji: '😐', 
-    label: 'Neutral', 
-    value: 'neutral', 
-    color: 'bg-blue-100 hover:bg-blue-200 border-blue-300',
-    description: 'Feeling balanced or indifferent'
-  },
-  { 
-    emoji: '😊', 
-    label: 'Happy', 
-    value: 'happy', 
-    color: 'bg-green-100 hover:bg-green-200 border-green-300',
-    description: 'Feeling joyful or content'
-  },
-  { 
-    emoji: '😌', 
-    label: 'Calm', 
-    value: 'calm', 
-    color: 'bg-purple-100 hover:bg-purple-200 border-purple-300',
-    description: 'Feeling peaceful or relaxed'
-  },
-  { 
-    emoji: '😤', 
-    label: 'Stressed', 
-    value: 'stressed', 
-    color: 'bg-pink-100 hover:bg-pink-200 border-pink-300',
-    description: 'Feeling overwhelmed or pressured'
-  },
-  { 
-    emoji: '🤗', 
-    label: 'Grateful', 
-    value: 'grateful', 
-    color: 'bg-indigo-100 hover:bg-indigo-200 border-indigo-300',
-    description: 'Feeling thankful or appreciative'
-  }
-];
+import { MoodEntry, MoodType, MOOD_TYPES, MoodSource } from '@/lib/types/mood';
+import { createSupabaseClient } from '@/lib/supabase/client';
+import { MoodAnalyzer } from '@/lib/utils/moodAnalysis';
+import MoodCalendar from '@/components/MoodCalendar';
 
 export default function MoodTracking() {
-  const [selectedMood, setSelectedMood] = useState<string | null>(null);
+  const [selectedMood, setSelectedMood] = useState<MoodType | null>(null);
   const [rating, setRating] = useState<number>(50);
   const [notes, setNotes] = useState<string>('');
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [recentEntries, setRecentEntries] = useState<MoodEntry[]>([]);
+  const [aiDetectedMood, setAiDetectedMood] = useState<{
+    mood: MoodType;
+    confidence: number;
+    source: string;
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [showAiDetection, setShowAiDetection] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [allEntries, setAllEntries] = useState<MoodEntry[]>([]);
 
-  // Load recent entries from localStorage
+  const supabase = createSupabaseClient();
+
+  // Load user and recent entries
   useEffect(() => {
-    const savedEntries = localStorage.getItem('moodEntries');
-    if (savedEntries) {
-      const entries = JSON.parse(savedEntries).map((entry: any) => ({
-        ...entry,
-        timestamp: new Date(entry.timestamp)
-      }));
-      setRecentEntries(entries.slice(-5).reverse()); // Show last 5 entries
-    }
-  }, []);
+    const loadUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    loadUser();
+  }, [supabase.auth]);
 
-  const handleMoodSelect = (moodValue: string) => {
+  useEffect(() => {
+    const loadRecentEntries = async () => {
+      if (user) {
+        try {
+          const response = await fetch('/api/mood?limit=5');
+          const data = await response.json();
+          if (data.success) {
+            const entries = data.data.map((entry: any) => ({
+              ...entry,
+              createdAt: new Date(entry.created_at),
+              moodType: entry.mood_type,
+              source: entry.source
+            }));
+            setRecentEntries(entries.slice(-5).reverse());
+            setAllEntries(entries);
+          }
+        } catch (error) {
+          console.error('Error loading recent entries:', error);
+        }
+      } else {
+        // Fallback to localStorage for non-authenticated users
+        const savedEntries = localStorage.getItem('moodEntries');
+        if (savedEntries) {
+          const entries = JSON.parse(savedEntries).map((entry: any) => ({
+            ...entry,
+            createdAt: new Date(entry.timestamp),
+            moodType: entry.mood,
+            source: 'manual'
+          }));
+          setRecentEntries(entries.slice(-5).reverse());
+          setAllEntries(entries);
+        }
+      }
+    };
+
+    loadRecentEntries();
+  }, [user]);
+
+  // Check for AI-detected mood from recent chat
+  useEffect(() => {
+    const checkAiDetectedMood = async () => {
+      if (user) {
+        try {
+          const response = await fetch('/api/mood?limit=1&source=chat_analysis');
+          const data = await response.json();
+          if (data.success && data.data.length > 0) {
+            const latestAiMood = data.data[0];
+            const timeDiff = Date.now() - new Date(latestAiMood.created_at).getTime();
+            // Show AI detection if it's from the last 30 minutes
+            if (timeDiff < 30 * 60 * 1000) {
+              setAiDetectedMood({
+                mood: latestAiMood.mood_type,
+                confidence: latestAiMood.confidence_score,
+                source: 'Recent chat session'
+              });
+              setShowAiDetection(true);
+            }
+          }
+        } catch (error) {
+          console.error('Error checking AI detected mood:', error);
+        }
+      }
+    };
+
+    checkAiDetectedMood();
+  }, [user]);
+
+  const handleMoodSelect = (moodValue: MoodType) => {
     setSelectedMood(moodValue);
     setIsSubmitted(false);
+    setShowAiDetection(false);
   };
 
   const handleRatingChange = (newRating: number) => {
     setRating(newRating);
   };
 
-  const handleSubmit = () => {
-    if (selectedMood) {
-      const newEntry: MoodEntry = {
-        id: Date.now().toString(),
-        mood: selectedMood,
-        rating: rating,
-        timestamp: new Date(),
-        notes: notes.trim() || undefined
-      };
-
-      // Save to localStorage
-      const existingEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
-      const updatedEntries = [...existingEntries, newEntry];
-      localStorage.setItem('moodEntries', JSON.stringify(updatedEntries));
-
-      // Update recent entries display
-      setRecentEntries(prev => [newEntry, ...prev.slice(0, 4)]);
-      
-      setIsSubmitted(true);
-      
-      // Reset form after a delay
-      setTimeout(() => {
-        setSelectedMood(null);
-        setRating(50);
-        setNotes('');
-        setIsSubmitted(false);
-      }, 2000);
+  const handleAiMoodAccept = () => {
+    if (aiDetectedMood) {
+      setSelectedMood(aiDetectedMood.mood);
+      setRating(Math.round(aiDetectedMood.confidence * 100));
+      setShowAiDetection(false);
     }
   };
 
-  const getMoodColor = (mood: string) => {
-    const moodType = moodTypes.find(m => m.value === mood);
-    return moodType ? moodType.color.split(' ')[0] : 'bg-gray-100';
+  const handleAiMoodReject = () => {
+    setShowAiDetection(false);
+    setAiDetectedMood(null);
   };
 
-  const getMoodEmoji = (mood: string) => {
-    const moodType = moodTypes.find(m => m.value === mood);
-    return moodType ? moodType.emoji : '😐';
+  const handleSubmit = async () => {
+    if (selectedMood) {
+      setIsLoading(true);
+      
+      try {
+        const newEntry = {
+          moodType: selectedMood,
+          intensity: rating,
+          notes: notes.trim() || undefined,
+          source: 'manual' as MoodSource
+        };
+
+        if (user) {
+          // Save to database
+          const response = await fetch('/api/mood', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(newEntry),
+          });
+
+          const data = await response.json();
+          if (data.success) {
+            const entry = {
+              ...data.data,
+              createdAt: new Date(data.data.created_at),
+              moodType: data.data.mood_type,
+              source: data.data.source
+            };
+            setRecentEntries(prev => [entry, ...prev.slice(0, 4)]);
+          } else {
+            throw new Error(data.error);
+          }
+        } else {
+          // Fallback to localStorage for non-authenticated users
+          const entry = {
+            id: Date.now().toString(),
+            moodType: selectedMood,
+            intensity: rating,
+            createdAt: new Date(),
+            notes: notes.trim() || undefined,
+            source: 'manual' as MoodSource
+          };
+
+          const existingEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
+          const updatedEntries = [...existingEntries, {
+            ...entry,
+            mood: entry.moodType,
+            rating: entry.intensity,
+            timestamp: entry.createdAt
+          }];
+          localStorage.setItem('moodEntries', JSON.stringify(updatedEntries));
+
+          setRecentEntries(prev => [entry, ...prev.slice(0, 4)]);
+        }
+        
+        setIsSubmitted(true);
+        
+        // Reset form after a delay
+        setTimeout(() => {
+          setSelectedMood(null);
+          setRating(50);
+          setNotes('');
+          setIsSubmitted(false);
+          setAiDetectedMood(null);
+        }, 2000);
+      } catch (error) {
+        console.error('Error saving mood entry:', error);
+        alert('Failed to save mood entry. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
-  const getMoodLabel = (mood: string) => {
-    const moodType = moodTypes.find(m => m.value === mood);
-    return moodType ? moodType.label : 'Unknown';
+  const getMoodColor = (mood: MoodType) => {
+    return MOOD_TYPES[mood]?.color.split(' ')[0] || 'bg-gray-100';
+  };
+
+  const getMoodEmoji = (mood: MoodType) => {
+    return MOOD_TYPES[mood]?.emoji || '😐';
+  };
+
+  const getMoodLabel = (mood: MoodType) => {
+    return MOOD_TYPES[mood]?.label || 'Unknown';
+  };
+
+  const getSourceIcon = (source: MoodSource) => {
+    switch (source) {
+      case 'ai_detected':
+      case 'chat_analysis':
+        return '🤖';
+      case 'manual':
+        return '✋';
+      default:
+        return '✋';
+    }
+  };
+
+  const getSourceLabel = (source: MoodSource) => {
+    switch (source) {
+      case 'ai_detected':
+        return 'AI Detected';
+      case 'chat_analysis':
+        return 'From Chat';
+      case 'manual':
+        return 'Manual Entry';
+      default:
+        return 'Manual Entry';
+    }
+  };
+
+  const exportMoodData = () => {
+    const csvContent = [
+      ['Date', 'Time', 'Mood', 'Intensity', 'Source', 'Notes'],
+      ...allEntries.map(entry => [
+        entry.createdAt.toLocaleDateString(),
+        entry.createdAt.toLocaleTimeString(),
+        getMoodLabel(entry.moodType),
+        entry.intensity.toString(),
+        getSourceLabel(entry.source),
+        entry.notes || ''
+      ])
+    ].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mood-data-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -165,6 +284,45 @@ export default function MoodTracking() {
           </p>
         </motion.div>
 
+        {/* AI Detected Mood Alert */}
+        {showAiDetection && aiDetectedMood && (
+          <motion.div 
+            className="card mb-8 bg-blue-50 border-l-4 border-blue-400"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 text-sm font-medium">🤖</span>
+                </div>
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-blue-800">AI Detected Mood</h3>
+                <p className="text-blue-700 mt-1">
+                  Based on your recent chat session, I detected you might be feeling <strong>{getMoodLabel(aiDetectedMood.mood)}</strong> 
+                  ({Math.round(aiDetectedMood.confidence * 100)}% confidence). Would you like to use this as your mood entry?
+                </p>
+                <div className="mt-3 flex space-x-3">
+                  <button
+                    onClick={handleAiMoodAccept}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Yes, use this mood
+                  </button>
+                  <button
+                    onClick={handleAiMoodReject}
+                    className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
+                  >
+                    No, I'll choose manually
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Mood Input Form */}
         <motion.div 
           className="card mb-8"
@@ -180,12 +338,12 @@ export default function MoodTracking() {
           <div className="mb-8">
             <h3 className="text-lg font-medium text-gray-700 mb-4">Select your mood:</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {moodTypes.map((mood) => (
+              {Object.entries(MOOD_TYPES).map(([key, mood]) => (
                 <motion.button
-                  key={mood.value}
-                  onClick={() => handleMoodSelect(mood.value)}
+                  key={key}
+                  onClick={() => handleMoodSelect(key as MoodType)}
                   className={`p-4 rounded-xl border-2 transition-all duration-300 transform hover:scale-105 ${
-                    selectedMood === mood.value
+                    selectedMood === key
                       ? `${mood.color} border-current shadow-lg scale-105`
                       : `${mood.color} border-gray-200 hover:shadow-md`
                   }`}
@@ -259,10 +417,10 @@ export default function MoodTracking() {
             >
               <button
                 onClick={handleSubmit}
-                disabled={isSubmitted}
+                disabled={isSubmitted || isLoading}
                 className="bg-gradient-to-r from-ai-purple to-ai-green text-white px-8 py-4 rounded-xl font-semibold text-lg hover:shadow-lg transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
-                {isSubmitted ? '✓ Mood Logged!' : 'Log My Mood'}
+                {isLoading ? 'Saving...' : isSubmitted ? '✓ Mood Logged!' : 'Log My Mood'}
               </button>
             </motion.div>
           )}
@@ -281,27 +439,32 @@ export default function MoodTracking() {
               {recentEntries.map((entry) => (
                 <motion.div
                   key={entry.id}
-                  className={`p-4 rounded-xl border-l-4 ${getMoodColor(entry.mood)} border-current`}
+                  className={`p-4 rounded-xl border-l-4 ${getMoodColor(entry.moodType)} border-current`}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.3 }}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <span className="text-2xl">{getMoodEmoji(entry.mood)}</span>
+                      <span className="text-2xl">{getMoodEmoji(entry.moodType)}</span>
                       <div>
-                        <h3 className="font-medium text-gray-800">{getMoodLabel(entry.mood)}</h3>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-medium text-gray-800">{getMoodLabel(entry.moodType)}</h3>
+                          <span className="text-xs text-gray-500 flex items-center">
+                            {getSourceIcon(entry.source)} {getSourceLabel(entry.source)}
+                          </span>
+                        </div>
                         <p className="text-sm text-gray-600">
-                          {entry.timestamp.toLocaleDateString()} at {entry.timestamp.toLocaleTimeString()}
+                          {entry.createdAt.toLocaleDateString('en-US')} at {entry.createdAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-semibold text-gray-800">{entry.rating}/100</div>
+                      <div className="text-lg font-semibold text-gray-800">{entry.intensity}/100</div>
                       <div className="w-16 h-2 bg-gray-200 rounded-full">
                         <div 
                           className="h-2 bg-gradient-to-r from-ai-purple to-ai-green rounded-full"
-                          style={{ width: `${entry.rating}%` }}
+                          style={{ width: `${entry.intensity}%` }}
                         ></div>
                       </div>
                     </div>
@@ -315,19 +478,66 @@ export default function MoodTracking() {
           </motion.div>
         )}
 
+        {/* Calendar View Toggle */}
+        <motion.div 
+          className="text-center mb-8"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.6 }}
+        >
+          <button
+            onClick={() => setShowCalendar(!showCalendar)}
+            className="btn-secondary mr-4"
+          >
+            {showCalendar ? 'Hide Calendar' : 'Show Calendar View'}
+          </button>
+          {allEntries.length > 0 && (
+            <button
+              onClick={exportMoodData}
+              className="btn-secondary"
+            >
+              Export Data
+            </button>
+          )}
+        </motion.div>
+
+        {/* Calendar View */}
+        {showCalendar && allEntries.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <MoodCalendar 
+              moodEntries={allEntries}
+              onDateSelect={(date, entries) => {
+                console.log('Selected date:', date, 'Entries:', entries);
+              }}
+            />
+          </motion.div>
+        )}
+
         {/* Call-to-Action */}
         <motion.div 
           className="text-center"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.6 }}
+          transition={{ duration: 0.6, delay: 0.8 }}
         >
-          <Link 
-            href="/dashboard"
-            className="btn-primary inline-block"
-          >
-            View Your Progress Dashboard
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link 
+              href="/dashboard"
+              className="btn-primary inline-block"
+            >
+              View Your Progress Dashboard
+            </Link>
+            <Link 
+              href="/"
+              className="btn-secondary inline-block"
+            >
+              Chat with AI Therapist
+            </Link>
+          </div>
         </motion.div>
       </div>
 
