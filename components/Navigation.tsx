@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 export default function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isAuthed, setIsAuthed] = useState(false)
+  const [user, setUser] = useState<any>(null)
   const supabase = createSupabaseClient()
   const router = useRouter()
 
@@ -17,9 +18,11 @@ export default function Navigation() {
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return
       setIsAuthed(!!data.session)
+      setUser(data.session?.user || null)
     })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthed(!!session)
+      setUser(session?.user || null)
     })
     return () => {
       mounted = false
@@ -54,9 +57,6 @@ export default function Navigation() {
               <Link href="/exercise" className="text-secondary hover:text-text-dark px-3 py-2 text-sm font-medium transition-colors">
                 Exercise
               </Link>
-              <Link href="/#community" className="text-secondary hover:text-text-dark px-3 py-2 text-sm font-medium transition-colors">
-                Community
-              </Link>
               <Link href="/mood-tracking" className="text-secondary hover:text-text-dark px-3 py-2 text-sm font-medium transition-colors">
                 Mood Tracking
               </Link>
@@ -65,13 +65,38 @@ export default function Navigation() {
 
           {/* Right side */}
           <div className="hidden md:flex items-center justify-end gap-4">
-            <motion.div 
-              className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center border border-border"
-              whileHover={{ scale: 1.1, rotate: 5 }}
-              transition={{ duration: 0.2 }}
-            >
-              <span className="text-text-dark text-sm font-medium">U</span>
-            </motion.div>
+            {isAuthed && user ? (
+              <motion.div 
+                className="flex items-center gap-3"
+                whileHover={{ scale: 1.05 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="w-8 h-8 bg-gradient-to-br from-ai-purple to-ai-green rounded-full flex items-center justify-center border border-border">
+                  <span className="text-white text-sm font-medium">
+                    {user.user_metadata?.full_name ? 
+                      user.user_metadata.full_name.charAt(0).toUpperCase() : 
+                      user.email?.charAt(0).toUpperCase() || 'U'
+                    }
+                  </span>
+                </div>
+                <div className="text-sm">
+                  <div className="font-medium text-gray-800">
+                    {user.user_metadata?.full_name || 'User'}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {user.email}
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div 
+                className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center border border-border"
+                whileHover={{ scale: 1.1, rotate: 5 }}
+                transition={{ duration: 0.2 }}
+              >
+                <span className="text-text-dark text-sm font-medium">U</span>
+              </motion.div>
+            )}
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Link href="/dashboard" className="btn-primary">
                 Dashboard
@@ -88,8 +113,8 @@ export default function Navigation() {
               </motion.button>
             ) : (
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Link href="/signup" className="btn-secondary">
-                  Sign Up
+                <Link href="/signin" className="btn-secondary">
+                  Sign In
                 </Link>
               </motion.div>
             )}
@@ -153,9 +178,6 @@ export default function Navigation() {
                   <Link href="/exercise" className="text-secondary hover:text-text-dark block px-3 py-2 text-base font-medium">
                     Exercise
                   </Link>
-                  <Link href="/#community" className="text-secondary hover:text-text-dark block px-3 py-2 text-base font-medium">
-                    Community
-                  </Link>
                   <Link href="/mood-tracking" className="text-secondary hover:text-text-dark block px-3 py-2 text-base font-medium">
                     Mood Tracking
                   </Link>
@@ -167,12 +189,34 @@ export default function Navigation() {
                   transition={{ duration: 0.3, delay: 0.3 }}
                 >
                   <div className="flex items-center px-3 space-x-3">
-                    <motion.div 
-                      className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center border border-border"
-                      whileHover={{ scale: 1.1, rotate: 5 }}
-                    >
-                      <span className="text-text-dark text-sm font-medium">U</span>
-                    </motion.div>
+                    {isAuthed && user ? (
+                      <motion.div 
+                        className="flex items-center gap-2"
+                        whileHover={{ scale: 1.05 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <div className="w-8 h-8 bg-gradient-to-br from-ai-purple to-ai-green rounded-full flex items-center justify-center border border-border">
+                          <span className="text-white text-sm font-medium">
+                            {user.user_metadata?.full_name ? 
+                              user.user_metadata.full_name.charAt(0).toUpperCase() : 
+                              user.email?.charAt(0).toUpperCase() || 'U'
+                            }
+                          </span>
+                        </div>
+                        <div className="text-xs">
+                          <div className="font-medium text-gray-800">
+                            {user.user_metadata?.full_name || 'User'}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div 
+                        className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center border border-border"
+                        whileHover={{ scale: 1.1, rotate: 5 }}
+                      >
+                        <span className="text-text-dark text-sm font-medium">U</span>
+                      </motion.div>
+                    )}
                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                       <Link href="/dashboard" className="btn-primary text-sm">
                         Dashboard
@@ -189,8 +233,8 @@ export default function Navigation() {
                       </motion.button>
                     ) : (
                       <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                        <Link href="/signup" className="btn-secondary text-sm">
-                          Sign Up
+                        <Link href="/signin" className="btn-secondary text-sm">
+                          Sign In
                         </Link>
                       </motion.div>
                     )}

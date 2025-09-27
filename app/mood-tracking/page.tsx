@@ -163,11 +163,13 @@ export default function MoodTracking() {
           }
         } else {
           // Fallback to localStorage for non-authenticated users
-          const entry = {
+          const entry: MoodEntry = {
             id: Date.now().toString(),
+            userId: 'local_user', // For local storage mode
             moodType: selectedMood,
             intensity: rating,
             createdAt: new Date(),
+            updatedAt: new Date(),
             notes: notes.trim() || undefined,
             source: 'manual' as MoodSource
           };
@@ -238,6 +240,51 @@ export default function MoodTracking() {
       default:
         return 'Manual Entry';
     }
+  };
+
+  const generateDemoData = () => {
+    const demoEntries = [];
+    const moodTypes: MoodType[] = ['happy', 'calm', 'neutral', 'anxious', 'sad', 'stressed', 'grateful'];
+    
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      
+      const entriesPerDay = Math.floor(Math.random() * 3) + 1;
+      
+      for (let j = 0; j < entriesPerDay; j++) {
+        const moodType = moodTypes[Math.floor(Math.random() * moodTypes.length)];
+        const intensity = Math.floor(Math.random() * 40) + 30;
+        
+        const entry: MoodEntry = {
+          id: `demo-${i}-${j}`,
+          userId: 'demo-user',
+          moodType,
+          intensity,
+          notes: `Demo entry for ${moodType}`,
+          source: 'manual' as MoodSource,
+          createdAt: new Date(date.getTime() + j * 3600000),
+          updatedAt: new Date(date.getTime() + j * 3600000)
+        };
+        
+        demoEntries.push(entry);
+      }
+    }
+    
+    // Save to localStorage
+    const localStorageEntries = demoEntries.map(entry => ({
+      ...entry,
+      mood: entry.moodType,
+      rating: entry.intensity,
+      timestamp: entry.createdAt
+    }));
+    localStorage.setItem('moodEntries', JSON.stringify(localStorageEntries));
+    
+    // Update state
+    setAllEntries(demoEntries);
+    setRecentEntries(demoEntries.slice(-5).reverse());
+    
+    alert('Demo data generated! You can now view your progress dashboard.');
   };
 
   const exportMoodData = () => {
@@ -494,9 +541,17 @@ export default function MoodTracking() {
           {allEntries.length > 0 && (
             <button
               onClick={exportMoodData}
-              className="btn-secondary"
+              className="btn-secondary mr-4"
             >
               Export Data
+            </button>
+          )}
+          {allEntries.length === 0 && (
+            <button
+              onClick={generateDemoData}
+              className="btn-primary"
+            >
+              Generate Demo Data
             </button>
           )}
         </motion.div>

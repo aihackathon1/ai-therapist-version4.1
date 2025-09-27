@@ -49,6 +49,38 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    // Check if Supabase is properly configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('demo')) {
+      // Return demo data if Supabase is not configured
+      const demoEntries = [];
+      const moodTypes = ['happy', 'calm', 'neutral', 'anxious', 'sad', 'stressed', 'grateful'];
+      
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        
+        const entriesPerDay = Math.floor(Math.random() * 3) + 1;
+        
+        for (let j = 0; j < entriesPerDay; j++) {
+          const moodType = moodTypes[Math.floor(Math.random() * moodTypes.length)];
+          const intensity = Math.floor(Math.random() * 40) + 30;
+          
+          demoEntries.push({
+            id: `demo-${i}-${j}`,
+            user_id: 'demo-user',
+            mood_type: moodType,
+            intensity,
+            notes: `Demo entry for ${moodType}`,
+            source: 'manual',
+            created_at: new Date(date.getTime() + j * 3600000).toISOString(),
+            updated_at: new Date(date.getTime() + j * 3600000).toISOString()
+          });
+        }
+      }
+      
+      return NextResponse.json({ success: true, data: demoEntries });
+    }
+
     const supabase = createClient();
     
     // Get user from session

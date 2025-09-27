@@ -6,7 +6,133 @@ import Navigation from '@/components/Navigation'
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-gradient-soft">
+    <div className="min-h-screen bg-gradient-soft relative overflow-hidden">
+      {/* Background Geometry */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Large animated circles */}
+        <motion.div 
+          className="absolute top-20 left-10 w-32 h-32 bg-gradient-to-br from-ai-purple/10 to-ai-green/10 rounded-full blur-xl"
+          animate={{ 
+            scale: [1, 1.1, 1],
+            opacity: [0.1, 0.15, 0.1]
+          }}
+          transition={{ 
+            duration: 8,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        ></motion.div>
+        
+        <motion.div 
+          className="absolute top-40 right-20 w-24 h-24 bg-gradient-to-br from-ai-orange/10 to-ai-red/10 rounded-full blur-lg"
+          animate={{ 
+            scale: [1, 0.9, 1],
+            opacity: [0.1, 0.2, 0.1]
+          }}
+          transition={{ 
+            duration: 6,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 1
+          }}
+        ></motion.div>
+        
+        <motion.div 
+          className="absolute bottom-40 left-1/4 w-40 h-40 bg-gradient-to-br from-ai-green/10 to-emerald-500/10 rounded-full blur-2xl"
+          animate={{ 
+            scale: [1, 1.2, 1],
+            opacity: [0.1, 0.18, 0.1]
+          }}
+          transition={{ 
+            duration: 10,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 2
+          }}
+        ></motion.div>
+        
+        {/* Animated geometric shapes */}
+        <motion.div 
+          className="absolute top-60 right-1/3 w-16 h-16 bg-gradient-to-br from-ai-purple/20 to-ai-green/20 rotate-45 blur-sm"
+          animate={{ 
+            rotate: [45, 405, 45],
+            scale: [1, 1.1, 1]
+          }}
+          transition={{ 
+            duration: 12,
+            repeat: Infinity,
+            ease: "linear"
+          }}
+        ></motion.div>
+        
+        <motion.div 
+          className="absolute bottom-60 right-10 w-20 h-20 bg-gradient-to-br from-ai-orange/15 to-ai-red/15 rotate-12 blur-sm"
+          animate={{ 
+            rotate: [12, 372, 12],
+            scale: [1, 0.9, 1]
+          }}
+          transition={{ 
+            duration: 8,
+            repeat: Infinity,
+            ease: "linear",
+            delay: 1
+          }}
+        ></motion.div>
+        
+        <motion.div 
+          className="absolute top-1/3 left-1/2 w-12 h-12 bg-gradient-to-br from-ai-green/20 to-emerald-500/20 rotate-45 blur-sm"
+          animate={{ 
+            rotate: [45, 405, 45],
+            scale: [1, 1.2, 1]
+          }}
+          transition={{ 
+            duration: 6,
+            repeat: Infinity,
+            ease: "linear",
+            delay: 3
+          }}
+        ></motion.div>
+        
+        {/* Floating dots */}
+        <motion.div 
+          className="absolute top-1/4 left-1/3 w-3 h-3 bg-ai-purple/30 rounded-full"
+          animate={{ 
+            y: [-10, 10, -10],
+            opacity: [0.3, 0.6, 0.3]
+          }}
+          transition={{ 
+            duration: 4,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        ></motion.div>
+        
+        <motion.div 
+          className="absolute bottom-1/3 right-1/4 w-2 h-2 bg-ai-green/40 rounded-full"
+          animate={{ 
+            y: [10, -10, 10],
+            opacity: [0.4, 0.7, 0.4]
+          }}
+          transition={{ 
+            duration: 5,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 1
+          }}
+        ></motion.div>
+        
+        {/* Subtle grid pattern */}
+        <div className="absolute inset-0 opacity-[0.02]">
+          <div className="w-full h-full" style={{
+            backgroundImage: `
+              linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+            `,
+            backgroundSize: '50px 50px'
+          }}></div>
+        </div>
+      </div>
+      
       <Navigation />
       
       {/* Hero Section */}
@@ -77,11 +203,6 @@ export default function AboutPage() {
               whileHover={{ scale: 1.05, y: -5 }}
               className="card text-center group cursor-pointer"
             >
-              <div className="w-16 h-16 bg-gradient-to-r from-ai-purple to-ai-green rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-              </div>
               <h3 className="text-xl font-semibold text-gray-800 mb-4">
                 AI Conversations
               </h3>
@@ -99,11 +220,6 @@ export default function AboutPage() {
               whileHover={{ scale: 1.05, y: -5 }}
               className="card text-center group cursor-pointer"
             >
-              <div className="w-16 h-16 bg-gradient-to-r from-ai-green to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
               <h3 className="text-xl font-semibold text-gray-800 mb-4">
                 Mood Tracking
               </h3>
@@ -121,11 +237,6 @@ export default function AboutPage() {
               whileHover={{ scale: 1.05, y: -5 }}
               className="card text-center group cursor-pointer"
             >
-              <div className="w-16 h-16 bg-gradient-to-r from-ai-orange to-ai-red rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              </div>
               <h3 className="text-xl font-semibold text-gray-800 mb-4">
                 Mindful Exercises
               </h3>

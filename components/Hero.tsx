@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 
 interface Message {
   id: number;
@@ -11,6 +12,7 @@ interface Message {
 }
 
 export default function Hero() {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -155,6 +157,14 @@ export default function Hero() {
     return botResponses[Math.floor(Math.random() * botResponses.length)];
   };
 
+  const handleGetStarted = () => {
+    router.push('/signup');
+  };
+
+  const handleLearnMore = () => {
+    router.push('/signup');
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
@@ -197,7 +207,10 @@ export default function Hero() {
           'Content-Type': 'application/json',
         },
         // Send only user/assistant turns; backend injects therapeutic system prompt
-        body: JSON.stringify({ messages: chatHistory })
+        body: JSON.stringify({ 
+          messages: chatHistory,
+          sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        })
       });
 
       // Always attempt to read JSON and surface fallback content even if status is not OK
@@ -288,6 +301,7 @@ export default function Hero() {
                 }}
                 whileTap={{ scale: 0.95 }}
                 transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                onClick={handleGetStarted}
               >
                 Get Started
               </motion.button>
@@ -299,6 +313,7 @@ export default function Hero() {
                 }}
                 whileTap={{ scale: 0.95 }}
                 transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                onClick={handleLearnMore}
               >
                 Learn More
               </motion.button>

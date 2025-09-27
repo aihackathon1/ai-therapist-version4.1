@@ -5,6 +5,29 @@ import { MoodDataProcessor } from '@/lib/utils/moodAnalysis';
 
 export async function GET(request: NextRequest) {
   try {
+    // Check if Supabase is properly configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('demo')) {
+      // Return demo data if Supabase is not configured
+      return NextResponse.json({ 
+        success: true, 
+        data: {
+          totalEntries: 45,
+          averageMood: 65,
+          moodImprovement: 12,
+          currentStreak: 7,
+          dominantMood: 'happy',
+          moodDistribution: {
+            happy: 15,
+            calm: 12,
+            neutral: 8,
+            anxious: 5,
+            sad: 3,
+            stressed: 2
+          }
+        }
+      });
+    }
+
     const supabase = createClient();
     
     // Get user from session

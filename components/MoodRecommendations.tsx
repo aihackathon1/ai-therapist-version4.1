@@ -262,7 +262,7 @@ export default function MoodRecommendations({ currentMood, recentMoods, classNam
   }, [currentMood, recentMoods]);
 
   const handleCompleteRecommendation = (recommendation: MoodRecommendation) => {
-    setCompletedRecommendations(prev => new Set([...prev, recommendation.title]));
+    setCompletedRecommendations(prev => new Set(Array.from(prev).concat(recommendation.title)));
   };
 
   if (recommendations.length === 0) {

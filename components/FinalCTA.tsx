@@ -1,8 +1,11 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 
 export default function FinalCTA() {
+  const router = useRouter();
+  
   const fadeInUp = {
     initial: { opacity: 0, y: 50 },
     animate: { opacity: 1, y: 0 },
@@ -19,6 +22,14 @@ export default function FinalCTA() {
     initial: { opacity: 0, y: 50 },
     animate: { opacity: 1, y: 0 },
     transition: { duration: 0.8, delay: 0.4 }
+  };
+
+  const handleExperienceAI = () => {
+    // Scroll to the chatbot area (home section)
+    const homeSection = document.getElementById('home');
+    if (homeSection) {
+      homeSection.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   return (
@@ -56,6 +67,7 @@ export default function FinalCTA() {
               }}
               whileTap={{ scale: 0.95 }}
               transition={{ type: "spring", stiffness: 400, damping: 17 }}
+              onClick={handleExperienceAI}
             >
               Experience AI Therapy
             </motion.button>

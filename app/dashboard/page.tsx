@@ -37,73 +37,68 @@ export default function Dashboard() {
       setIsLoading(true);
       
       try {
-        if (user) {
-          // Load analytics from API
-          const analyticsResponse = await fetch('/api/analytics');
-          const analyticsData = await analyticsResponse.json();
-          if (analyticsData.success) {
-            setMoodAnalytics(analyticsData.data);
-          }
-
-          // Load mood entries
-          const moodResponse = await fetch('/api/mood?limit=100');
-          const moodData = await moodResponse.json();
-          if (moodData.success) {
-            const entries = moodData.data.map((entry: any) => ({
-              ...entry,
-              createdAt: new Date(entry.created_at),
-              moodType: entry.mood_type,
-              source: entry.source
-            }));
-            setMoodEntries(entries);
-            
-            // Process mood data for charts
-            const trends = MoodDataProcessor.calculateTrends(entries, 30);
-            setMoodTrends(trends);
-            
-            // Create mood distribution chart data
-            const distribution = Object.entries(analyticsData.data.moodDistribution || {}).map(([mood, count]) => ({
-              mood: MOOD_TYPES[mood as keyof typeof MOOD_TYPES]?.label || mood,
-              count: count as number,
-              emoji: MOOD_TYPES[mood as keyof typeof MOOD_TYPES]?.emoji || '😐'
-            }));
-            setMoodDistribution(distribution);
-
-            // Generate weekly pattern
-            const weeklyData = generateWeeklyPattern(entries);
-            setWeeklyPattern(weeklyData);
-
-            // Generate journey summary
-            generateJourneySummary(entries, analyticsData.data.moodImprovement);
-          }
-
-          // Load chat insights
-          await loadChatInsights();
+        // Check for localStorage data first
+        const savedEntries = localStorage.getItem('moodEntries');
+        if (savedEntries) {
+          const entries = JSON.parse(savedEntries).map((entry: any) => ({
+            ...entry,
+            createdAt: new Date(entry.timestamp),
+            moodType: entry.mood,
+            source: 'manual'
+          }));
+          setMoodEntries(entries);
+          processMoodData(entries);
         } else {
-          // Fallback to localStorage for non-authenticated users
-      const savedEntries = localStorage.getItem('moodEntries');
-      if (savedEntries) {
-        const entries = JSON.parse(savedEntries).map((entry: any) => ({
-          ...entry,
-              createdAt: new Date(entry.timestamp),
-              moodType: entry.mood,
-              source: 'manual'
-        }));
-        setMoodEntries(entries);
-        processMoodData(entries);
-          }
+          // Generate demo data if no localStorage data exists
+          generateDemoData();
         }
+
+        // Load chat insights
+        await loadChatInsights();
       } catch (error) {
         console.error('Error loading dashboard data:', error);
+        // Fallback to demo data on error
+        generateDemoData();
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (user !== null) {
-      loadDashboardData();
+    loadDashboardData();
+  }, []);
+
+  const generateDemoData = () => {
+    // Generate demo mood entries for the last 30 days
+    const demoEntries: MoodEntry[] = [];
+    const moodTypes: MoodType[] = ['happy', 'calm', 'neutral', 'anxious', 'sad', 'stressed', 'grateful'];
+    
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      
+      // Generate 1-3 entries per day
+      const entriesPerDay = Math.floor(Math.random() * 3) + 1;
+      
+      for (let j = 0; j < entriesPerDay; j++) {
+        const moodType = moodTypes[Math.floor(Math.random() * moodTypes.length)];
+        const intensity = Math.floor(Math.random() * 40) + 30; // 30-70 range
+        
+        demoEntries.push({
+          id: `demo-${i}-${j}`,
+          userId: 'demo-user',
+          moodType,
+          intensity,
+          notes: `Demo entry for ${moodType}`,
+          source: 'manual' as MoodSource,
+          createdAt: new Date(date.getTime() + j * 3600000), // Spread throughout the day
+          updatedAt: new Date(date.getTime() + j * 3600000)
+        });
+      }
     }
-  }, [user]);
+    
+    setMoodEntries(demoEntries);
+    processMoodData(demoEntries);
+  };
 
   const loadChatInsights = async () => {
     try {
@@ -152,23 +147,36 @@ export default function Dashboard() {
     // Sort entries by timestamp
     const sortedEntries = [...entries].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     
-    // Calculate mood comparison (first vs last entries for each mood type)
-    const moodTypes = Object.keys(MOOD_TYPES) as Array<keyof typeof MOOD_TYPES>;
-    const comparisonData = moodTypes.map(moodType => {
-      const moodEntries = sortedEntries.filter(entry => entry.moodType === moodType);
-      if (moodEntries.length === 0) {
-        return { mood: MOOD_TYPES[moodType].label, before: 0, after: 0 };
-      }
-      
-      const firstEntry = moodEntries[0];
-      const lastEntry = moodEntries[moodEntries.length - 1];
-      
-      return {
-        mood: MOOD_TYPES[moodType].label,
-        before: firstEntry.intensity,
-        after: lastEntry.intensity
-      };
-    }).filter(item => item.before > 0 || item.after > 0);
+    // Calculate analytics
+    const totalEntries = entries.length;
+    const averageMood = entries.reduce((sum, entry) => sum + entry.intensity, 0) / entries.length;
+    const improvement = MoodDataProcessor.calculateImprovement(entries);
+    const streak = MoodDataProcessor.calculateStreak(entries);
+    const dominantMood = MoodDataProcessor.getMostFrequentMood(entries);
+    
+    // Calculate mood distribution
+    const moodDistribution = entries.reduce((acc, entry) => {
+      acc[entry.moodType] = (acc[entry.moodType] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Set analytics
+    setMoodAnalytics({
+      totalEntries,
+      averageMood,
+      moodImprovement: improvement,
+      currentStreak: streak,
+      dominantMood,
+      moodDistribution
+    });
+
+    // Create mood distribution chart data
+    const distribution = Object.entries(moodDistribution).map(([mood, count]) => ({
+      mood: MOOD_TYPES[mood as keyof typeof MOOD_TYPES]?.label || mood,
+      count: count as number,
+      emoji: MOOD_TYPES[mood as keyof typeof MOOD_TYPES]?.emoji || '😐'
+    }));
+    setMoodDistribution(distribution);
 
     // Calculate mood over time (last 30 days)
     const thirtyDaysAgo = new Date();
@@ -192,13 +200,18 @@ export default function Dashboard() {
       date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       averageRating: Math.round(data.totalRating / data.count),
       entries: data.entries.length,
-      dominantMood: getMostFrequentMood(data.entries)
+      dominantMood: getMostFrequentMood(data.entries),
+      manualEntries: data.entries.filter((entry: any) => entry.source === 'manual').length,
+      aiDetectedEntries: data.entries.filter((entry: any) => entry.source !== 'manual').length
     })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    setMoodOverTime(timeSeriesData);
+    setMoodTrends(timeSeriesData);
+
+    // Generate weekly pattern
+    const weeklyData = generateWeeklyPattern(entries);
+    setWeeklyPattern(weeklyData);
 
     // Generate journey summary
-    const improvement = MoodDataProcessor.calculateImprovement(entries);
     generateJourneySummary(sortedEntries, improvement);
   };
 
@@ -261,9 +274,10 @@ export default function Dashboard() {
     if (confirm('Are you sure you want to reset all your mood data? This action cannot be undone.')) {
       localStorage.removeItem('moodEntries');
       setMoodEntries([]);
-      setMoodComparison([]);
-      setMoodOverTime([]);
-      setStats({ totalEntries: 0, averageMood: 0, moodImprovement: 0, streak: 0 });
+      setMoodTrends([]);
+      setMoodDistribution([]);
+      setWeeklyPattern([]);
+      setMoodAnalytics(null);
       setJourneySummary({ before: '', after: '' });
     }
   };
@@ -458,7 +472,7 @@ export default function Dashboard() {
                           cx="50%"
                           cy="50%"
                           labelLine={false}
-                          label={({ mood, emoji, percent }) => `${emoji} ${mood} ${(percent * 100).toFixed(0)}%`}
+                          label={({ mood, emoji, percent }: any) => `${emoji} ${mood} ${(percent * 100).toFixed(0)}%`}
                           outerRadius={80}
                           fill="#8884d8"
                           dataKey="count"
